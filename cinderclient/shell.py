@@ -117,10 +117,6 @@ class OpenStackCinderShell(object):
                             default=utils.env('CINDER_SERVICE_NAME'),
                             help='Defaults to env[CINDER_SERVICE_NAME]')
 
-        parser.add_argument('--volume_service_name',
-                            default=utils.env('CINDER_VOLUME_SERVICE_NAME'),
-                            help='Defaults to env[CINDER_VOLUME_SERVICE_NAME]')
-
         parser.add_argument('--endpoint_type',
                             default=utils.env('CINDER_ENDPOINT_TYPE',
                             default=DEFAULT_CINDER_ENDPOINT_TYPE),
@@ -304,16 +300,20 @@ class OpenStackCinderShell(object):
             return 0
 
         (os_username, os_password, os_tenant_name, os_auth_url,
-         os_region_name, endpoint_type, insecure,
-         service_type, service_name, volume_service_name,
+         os_region_name, endpoint_type, insecure, service_type,
          username, apikey, projectid, url, region_name) = (
-             args.os_username, args.os_password,
-             args.os_tenant_name, args.os_auth_url,
-             args.os_region_name, args.endpoint_type,
-             args.insecure, args.service_type, args.service_name,
-             args.volume_service_name, args.username,
-             args.apikey, args.projectid,
-             args.url, args.region_name)
+            args.os_username,
+            args.os_password,
+            args.os_tenant_name,
+            args.os_auth_url,
+            args.os_region_name,
+            args.endpoint_type,
+            args.insecure,
+            args.service_type,
+            args.username,
+            args.apikey,
+            args.projectid,
+            args.url, args.region_name)
 
         if not endpoint_type:
             endpoint_type = DEFAULT_CINDER_ENDPOINT_TYPE
@@ -371,14 +371,16 @@ class OpenStackCinderShell(object):
                 "You must provide an auth url "
                 "via either --os_auth_url or env[OS_AUTH_URL]")
 
-        self.cs = client.Client(options.os_volume_api_version, os_username,
-                                os_password, os_tenant_name, os_auth_url,
-                                insecure, region_name=os_region_name,
+        self.cs = client.Client(options.os_volume_api_version,
+                                username=os_username,
+                                password=os_password,
+                                tenant_name=os_tenant_name,
+                                auth_url=os_auth_url,
+                                insecure=insecure,
+                                region_name=os_region_name,
                                 endpoint_type=endpoint_type,
                                 extensions=self.extensions,
-                                service_type=service_type,
-                                service_name=service_name,
-                                volume_service_name=volume_service_name)
+                                service_type=service_type)
 
         try:
             if not utils.isunauthenticated(args.func):
