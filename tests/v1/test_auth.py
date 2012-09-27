@@ -302,7 +302,7 @@ class AuthenticateAgainstKeystoneTests(utils.TestCase):
 class AuthenticationTests(utils.TestCase):
     def test_authenticate_success(self):
         cs = client.Client("username", "password", "project_id", "auth_url")
-        management_url = 'https://servers.api.rackspacecloud.com/v1.1/443470'
+        management_url = 'https://localhost/v1.1/443470'
         auth_response = httplib2.Response({
             'status': 204,
             'x-server-management-url': management_url,

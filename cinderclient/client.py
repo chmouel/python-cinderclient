@@ -7,10 +7,12 @@
 OpenStack Client interface. Handles the REST calls and responses.
 """
 
-import httplib2
 import logging
 import os
 import urlparse
+
+import httplib2
+import pkg_resources
 
 try:
     import json
@@ -34,20 +36,32 @@ if 'CINDERCLIENT_DEBUG' in os.environ and os.environ['CINDERCLIENT_DEBUG']:
     _logger.addHandler(ch)
 
 
+def get_auth_system_url(auth_system):
+    """Load plugin-based auth_url"""
+    ep_name = 'openstack.client.auth_url'
+    for ep in pkg_resources.iter_entry_points(ep_name):
+        if ep.name == auth_system:
+            return ep.load()()
+    raise exceptions.AuthSystemNotFound(auth_system)
+
+
 class HTTPClient(httplib2.Http):
 
     USER_AGENT = 'python-cinderclient'
 
-    def __init__(self, user, password, projectid, auth_url, insecure=False,
+    def __init__(self, user, password, projectid, auth_url=None,
                  timeout=None, tenant_id=None, proxy_tenant_id=None,
                  proxy_token=None, region_name=None,
                  endpoint_type='publicURL', service_type=None,
-                 service_name=None, volume_service_name=None):
+                 service_name=None, volume_service_name=None,
+                 insecure=False, auth_system='keystone'):
         super(HTTPClient, self).__init__(timeout=timeout)
         self.user = user
         self.password = password
         self.projectid = projectid
         self.tenant_id = tenant_id
+        if not auth_url and auth_system and auth_system != 'keystone':
+            auth_url = get_auth_system_url(auth_system)
         self.auth_url = auth_url.rstrip('/')
         self.version = 'v1'
         self.region_name = region_name
@@ -64,6 +78,8 @@ class HTTPClient(httplib2.Http):
         # httplib2 overrides
         self.force_exception_to_status_code = True
         self.disable_ssl_certificate_validation = insecure
+
+        self.auth_system = auth_system
 
     def http_log(self, args, kwargs, resp, body):
         if not _logger.isEnabledFor(logging.DEBUG):
@@ -223,13 +239,20 @@ class HTTPClient(httplib2.Http):
         admin_url = urlparse.urlunsplit((scheme, new_netloc,
                                          path, query, frag))
 
+        # FIXME(chmouel): This is to handle backward compatibiliy when
+        # we didn't have a plugin mechanism for the auth_system. This
+        # should be removed in the future and have people move to
+        # OS_AUTH_SYSTEM=rackspace instead.
+        if "NOVA_RAX_AUTH" in os.environ:
+            self.auth_system = "rackspace"
+
         auth_url = self.auth_url
         if self.version == "v2.0":
             while auth_url:
-                if "CINDER_RAX_AUTH" in os.environ:
-                    auth_url = self._rax_auth(auth_url)
-                else:
+                if not self.auth_system or self.auth_system == 'keystone':
                     auth_url = self._v2_auth(auth_url)
+                else:
+                    auth_url = self._plugin_auth(auth_url)
 
             # Are we acting on behalf of another user via an
             # existing token? If so, our actual endpoints may
@@ -275,6 +298,14 @@ class HTTPClient(httplib2.Http):
         else:
             raise exceptions.from_response(resp, body)
 
+    def _plugin_auth(self, auth_url):
+        """Load plugin-based authentication"""
+        ep_name = 'openstack.client.authenticate'
+        for ep in pkg_resources.iter_entry_points(ep_name):
+            if ep.name == self.auth_system:
+                return ep.load()(self, auth_url)
+        raise exceptions.AuthSystemNotFound(self.auth_system)
+
     def _v2_auth(self, url):
         """Authenticate against a v2.0 auth service."""
         body = {"auth": {
@@ -285,16 +316,6 @@ class HTTPClient(httplib2.Http):
             body['auth']['tenantName'] = self.projectid
         elif self.tenant_id:
             body['auth']['tenantId'] = self.tenant_id
-
-        self._authenticate(url, body)
-
-    def _rax_auth(self, url):
-        """Authenticate against the Rackspace auth service."""
-        body = {"auth": {
-                "RAX-KSKEY:apiKeyCredentials": {
-                    "username": self.user,
-                    "apiKey": self.password,
-                    "tenantName": self.projectid}}}
 
         self._authenticate(url, body)
 

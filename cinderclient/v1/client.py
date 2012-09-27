@@ -29,7 +29,7 @@ class Client(object):
                  proxy_tenant_id=None, proxy_token=None, region_name=None,
                  endpoint_type='publicURL', extensions=None,
                  service_type='volume', service_name=None,
-                 volume_service_name=None):
+                 volume_service_name=None, auth_system='keystone'):
         # FIXME(comstud): Rename the api_key argument above when we
         # know it's not being used as keyword argument
         password = api_key
@@ -54,6 +54,7 @@ class Client(object):
             password,
             project_id,
             auth_url,
+            auth_system=auth_system,
             insecure=insecure,
             timeout=timeout,
             tenant_id=tenant_id,
